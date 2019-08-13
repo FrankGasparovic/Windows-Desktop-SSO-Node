@@ -156,31 +156,6 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         this.realm = realm;
     }
 
-    /**
-     * Iterate until we extract the real exception
-     * from PrivilegedActionException(s).
-     */
-    private static Exception extractException(Exception e) {
-        while (e instanceof PrivilegedActionException) {
-            e = ((PrivilegedActionException) e).getException();
-        }
-        return e;
-    }
-
-    private boolean isTokenTrusted(final String UPN, final String realm) {
-        boolean trusted = false;
-        if (UPN != null) {
-            final int param_index = UPN.indexOf(REALM_SEPARATOR);
-            if (param_index != -1) {
-                final String realmPart = UPN.substring(param_index + 1);
-                if (realmPart.equalsIgnoreCase(realm)) {
-                    trusted = true;
-                }
-            }
-        }
-        return trusted;
-    }
-
     @Override
     public Action process(TreeContext context) throws NodeProcessException {
 
@@ -470,6 +445,32 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         Subject serviceSubject = lc.getSubject();
         logger.debug("Service login succeeded.");
         return serviceSubject;
+    }
+
+
+    /**
+     * Iterate until we extract the real exception
+     * from PrivilegedActionException(s).
+     */
+    private Exception extractException(Exception e) {
+        while (e instanceof PrivilegedActionException) {
+            e = ((PrivilegedActionException) e).getException();
+        }
+        return e;
+    }
+
+    private boolean isTokenTrusted(final String UPN, final String realm) {
+        boolean trusted = false;
+        if (UPN != null) {
+            final int param_index = UPN.indexOf(REALM_SEPARATOR);
+            if (param_index != -1) {
+                final String realmPart = UPN.substring(param_index + 1);
+                if (realmPart.equalsIgnoreCase(realm)) {
+                    trusted = true;
+                }
+            }
+        }
+        return trusted;
     }
 
 }
