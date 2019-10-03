@@ -430,10 +430,13 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
 
     private Subject serviceLogin() throws NodeProcessException {
         logger.debug("New Service Login ...");
+        System.setProperty("java.security.krb5.realm", config.kerberosRealm());
+        System.setProperty("java.security.krb5.kdc", config.kerberosServerName());
         WindowsDesktopSSOConfig wtc = new WindowsDesktopSSOConfig(Configuration.getConfiguration());
         wtc.setPrincipalName(config.principalName());
         wtc.setKeyTab(config.keytabFileName());
         wtc.setIsInitiator(config.kerberosServiceIsInitiator());
+
         LoginContext lc;
         // perform service authentication using JDK Kerberos module
         try {
