@@ -18,6 +18,7 @@
 package org.forgerock.openam.auth.nodes;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.forgerock.http.util.Json;
 import org.forgerock.json.JsonValue;
 import org.forgerock.openam.annotations.sm.Attribute;
@@ -203,6 +204,7 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
             return goTo(true).replaceSharedState(sharedState).build();
         } catch (PrivilegedActionException pe) {
             Exception e = extractException(pe);
+            logger.error("Exception thrown trying to authenticate the user\n" + ExceptionUtils.getStackTrace(e));
             if (e instanceof GSSException) {
                 int major = ((GSSException) e).getMajor();
                 if (major == GSSException.CREDENTIALS_EXPIRED) {
