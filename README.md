@@ -31,13 +31,22 @@ To deploy this node, download the jar from the releases tab on github
 ../web-container/webapps/openam/WEB-INF/lib directory where AM is deployed. Restart the web container to pick up the 
 new node. The node will then appear in the authentication trees components palette.
 
+### Generate Service Account KeyTab File
+To generate a valid Kerberos keytab file for the service account, use the following ktpass command: 
+```
+ktpass -out fileName.keytab -princ HTTP/openam.forgerock.com@AD_DOMAIN.COM -pass +rdnPass -maxPass 256 -mapuser amKerberos@frdpcloud.com -crypto AES256-SHA1 -ptype KRB5_NT_PRINCIPAL -kvno 0
+```
+
 ### Windows Desktop SSO Node Configuration
 * **Service Principal** - The name of the Kerberos principal used during authentication. The format of the field is
- as follows: ```HTTP/openam.forgerock.com@AD_DOMAIN.COM```
+ as follows: ```HTTP/openam.forgerock.com@AD_DOMAIN.COM```. Note that the hostname should be used for the service
+  principal name. In this example, the hostname is `openam.forgerock.com`
 * **Key Tab File Path** - The absolute pathname of the AD keytab file.
-* **Kerberos Realm** - The name of the Kerberos (Active Directory) realm used for authentication.
+* **Kerberos Realm** - The name of the Kerberos (Active Directory) realm used for authentication. Note, the realm
+ must be in all caps.
 * **Kerberos Server Name** - The hostname/IP address of the Kerberos (Active Directory) server.
-* **Trusted Kerberos realms** - List of Trusted Kerberos Realms for User Kerberos tickets.
+* **Trusted Kerberos realms** - List of Trusted Kerberos Realms for User Kerberos tickets. Note, the realms must be in
+ all caps.
 * **Return Principal with Domain Name** - Returns the fully qualified name of the authenticated user rather than just the username.
 * **Lookup User In Realm** - Validate that the user has a matched user profile configured in the data store.
 * **Is Initiator** - True, if initiator. False, if acceptor only. Default is True.
@@ -49,3 +58,20 @@ This flow will attempt to authenticate the user via Windows Desktop SSO. If unsu
  username and password for login.
  
   ![WINDOWS_SSO_FLOW](./images/windows_sso_flow.png)
+  
+
+### Common Errors
+
+1. Kerberos relies on DNS for entity resolution. All records for servers involved in the flow must be A records, not
+ CNAME records.
+ 2. You may see the below errors in the AM log files:
+```
+ERROR: Exception thrown trying to authenticate the user
+GSSException: Failure unspecified at GSS-API level (Mechanism level: Invalid argument (400) - Cannot find key of appropriate type to decrypt AP REP - RC4 with HMAC)
+```
+
+One potential fix to this issue is to regenerate the AM service keytab file without the `-crypto AES256-SHA1`. The keytab command would then be: 
+
+```
+ktpass -out fileName.keytab -princ HTTP/openam.forgerock.com@AD_DOMAIN.COM -pass +rdnPass -maxPass 256 -mapuser amKerberos@frdpcloud.com -ptype KRB5_NT_PRINCIPAL -kvno 0
+```

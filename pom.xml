@@ -23,7 +23,7 @@
     <artifactId>windowsdesktopsso-auth-node</artifactId>
 
     <groupId>org.forgerock.am</groupId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <name>WindowsDesktopSSO Auth Tree Node</name>
     <description>An Authentication Tree Node for ForgeRock's Identity Platform</description>
 
