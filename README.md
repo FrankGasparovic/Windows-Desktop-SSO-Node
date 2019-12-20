@@ -34,7 +34,7 @@ new node. The node will then appear in the authentication trees components palet
 ### Generate Service Account KeyTab File
 To generate a valid Kerberos keytab file for the service account, use the following ktpass command: 
 ```
-ktpass -outfileName.keytab -princ HTTP/openam.forgerock.com@AD_DOMAIN.COM -pass +rdnPass -maxPass 256 -mapuser amKerberos@frdpcloud.com -crypto AES256-SHA1 -ptype KRB5_NT_PRINCIPAL -kvno 0
+ktpass -out fileName.keytab -princ HTTP/openam.forgerock.com@AD_DOMAIN.COM -pass +rdnPass -maxPass 256 -mapuser amKerberos@frdpcloud.com -crypto AES256-SHA1 -ptype KRB5_NT_PRINCIPAL -kvno 0
 ```
 
 ### Windows Desktop SSO Node Configuration
