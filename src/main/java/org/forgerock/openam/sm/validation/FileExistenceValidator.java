@@ -20,7 +20,7 @@ public class FileExistenceValidator implements ServiceAttributeValidator {
         }
 
         for (String value : set) {
-            if (!Files.exists(Paths.get(value))) {
+            if (!Files.exists(Paths.get(value)) || value.isEmpty()) {
                 return false;
             }
         }
