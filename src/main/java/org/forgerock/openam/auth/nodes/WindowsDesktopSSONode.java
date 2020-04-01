@@ -17,28 +17,6 @@
 
 package org.forgerock.openam.auth.nodes;
 
-import com.sun.identity.sm.RequiredValueValidator;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.exception.ExceptionUtils;
-import org.forgerock.http.util.Json;
-import org.forgerock.json.JsonValue;
-import org.forgerock.openam.annotations.sm.Attribute;
-import org.forgerock.openam.auth.node.api.AbstractDecisionNode;
-import org.forgerock.openam.auth.node.api.Action;
-import org.forgerock.openam.auth.node.api.Node;
-import org.forgerock.openam.auth.node.api.NodeProcessException;
-import org.forgerock.openam.auth.node.api.SharedStateConstants;
-import org.forgerock.openam.auth.node.api.TreeContext;
-import org.forgerock.openam.core.realms.Realm;
-import org.forgerock.openam.sm.validation.FileExistenceValidator;
-import org.ietf.jgss.GSSContext;
-import org.ietf.jgss.GSSCredential;
-import org.ietf.jgss.GSSException;
-import org.ietf.jgss.GSSManager;
-import org.ietf.jgss.GSSName;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.inject.assistedinject.Assisted;
 import com.sun.identity.authentication.modules.windowsdesktopsso.WindowsDesktopSSOConfig;
 import com.sun.identity.authentication.spi.HttpCallback;
@@ -46,23 +24,32 @@ import com.sun.identity.authentication.util.DerValue;
 import com.sun.identity.idm.AMIdentity;
 import com.sun.identity.idm.IdUtils;
 import com.sun.identity.shared.encode.Base64;
+import com.sun.identity.sm.RequiredValueValidator;
+import org.apache.commons.lang.exception.ExceptionUtils;
+import org.forgerock.http.util.Json;
+import org.forgerock.json.JsonValue;
+import org.forgerock.openam.annotations.sm.Attribute;
+import org.forgerock.openam.auth.node.api.*;
+import org.forgerock.openam.core.realms.Realm;
+import org.forgerock.openam.sm.validation.FileExistenceValidator;
+import org.ietf.jgss.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
 import javax.inject.Inject;
 import javax.security.auth.Subject;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import javax.servlet.http.HttpServletRequest;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Windows Desktop SSO Node
@@ -81,8 +68,10 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
             (byte) 0x06, (byte) 0x09, (byte) 0x2a, (byte) 0x86, (byte) 0x48,
             (byte) 0x86, (byte) 0xf7, (byte) 0x12, (byte) 0x01, (byte) 0x02,
             (byte) 0x02};
+    private static final String JSON_PARAMETER_NAME = "jsonContent";
     private static final String FAILURE_ATTRIBUTE = "failure";
     private static final String REASON_ATTRIBUTE = "reason";
+
     private final Logger logger = LoggerFactory.getLogger("amAuth");
     private final Config config;
     private final Realm realm;
@@ -100,19 +89,19 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         /**
          * The header name for zero-page login that will contain the identity's username.
          */
-        @Attribute(order = 200, validators = {FileExistenceValidator.class,})
+        @Attribute(order = 200, validators = {FileExistenceValidator.class})
         String keytabFileName();
 
         /**
          * The header name for zero-page login that will contain the identity's username.
          */
-        @Attribute(order = 300, validators = {RequiredValueValidator.class,})
+        @Attribute(order = 300, validators = {RequiredValueValidator.class})
         String kerberosRealm();
 
         /**
          * The header name for zero-page login that will contain the identity's username.
          */
-        @Attribute(order = 400, validators = {RequiredValueValidator.class,})
+        @Attribute(order = 400, validators = {RequiredValueValidator.class})
         String kerberosServerName();
 
         /**
@@ -160,7 +149,9 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
     }
 
     @Override
-    public Action process(TreeContext context) throws NodeProcessException {
+    public Action process(TreeContext context) {
+
+        JsonValue newSharedState = context.sharedState.copy();
 
         HttpServletRequest request = context.request.servletRequest;
         if (request != null && hasWDSSOFailed(request)) {
@@ -172,6 +163,7 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
             return Action.send(new HttpCallback(AUTHORIZATION, "WWW-Authenticate", NEGOTIATE, 401)).build();
         }
 
+
         Subject serviceSubject = serviceLogin();
 
         byte[] spnegoToken = getSPNEGOTokenFromHTTPRequest(Objects.requireNonNull(request));
@@ -180,7 +172,7 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         }
 
         if (spnegoToken == null) {
-            throw new NodeProcessException("spnego token is not valid.");
+            return logErrorAndReturnFalse(newSharedState, "spnego token is not valid.");
         }
 
         if (logger.isDebugEnabled()) {
@@ -189,19 +181,20 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         final byte[] kerberosToken = parseToken(spnegoToken);
 
         if (kerberosToken == null) {
-            throw new NodeProcessException("Kerberos token is not valid.");
+            return logErrorAndReturnFalse(newSharedState, "Kerberos token is not valid.");
         }
 
         if (logger.isDebugEnabled()) {
             logger.debug("Kerberos token retrieved from SPNEGO token: \n{}",
-                         DerValue.printByteArray(kerberosToken, 0, kerberosToken.length));
+                    DerValue.printByteArray(kerberosToken, 0, kerberosToken.length));
         }
 
-        JsonValue sharedState;
+        String username;
         try {
-            sharedState = authenticateToken(serviceSubject, kerberosToken, config.trustedKerberosRealms(),
-                                            context.sharedState);
-            return goTo(true).replaceSharedState(sharedState).build();
+            username = authenticateToken(serviceSubject, kerberosToken, config.trustedKerberosRealms());
+            if (username != null && !username.isEmpty()) {
+                return goTo(true).replaceSharedState(newSharedState).build();
+            }
         } catch (PrivilegedActionException pe) {
             Exception e = extractException(pe);
             logger.error("Exception thrown trying to authenticate the user\n" + ExceptionUtils.getStackTrace(e));
@@ -211,26 +204,38 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
                     logger.debug("Credential expired. Re-establish credential...");
                     serviceSubject = serviceLogin();
                     try {
-                        sharedState = authenticateToken(serviceSubject, kerberosToken, config.trustedKerberosRealms(),
-                                                        context.sharedState);
-                        logger.debug("Authentication succeeded with new cred.");
-                        return goTo(true).replaceSharedState(sharedState).build();
+                        username = authenticateToken(serviceSubject, kerberosToken, config.trustedKerberosRealms());
+                        if (username != null && !username.isEmpty()) {
+                            logger.debug("Authentication succeeded with new cred.");
+                            return goTo(true).replaceSharedState(newSharedState).build();
+                        }
                     } catch (PrivilegedActionException ex) {
-                        throw new NodeProcessException(ex);
+                        logger.error("Error while validating kerberos token", ex);
                     }
                 }
             } else {
-                throw new NodeProcessException(
+                logger.error(
                         "Authentication failed with PrivilegedActionException wrapped GSSException. Stack Trace", e);
             }
         }
-        return goTo(false).build();
+        return goTo(false).replaceSharedState(newSharedState).build();
     }
 
-    private JsonValue authenticateToken(final Subject serviceSubject, final byte[] kerberosToken,
-                                        final Set<String> trustedRealms, JsonValue sharedState)
+    private Action logErrorAndReturnFalse(JsonValue newSharedState, String text, Object... objects) {
+        logger.error(text, objects);
+        return goTo(false).replaceSharedState(newSharedState).build();
+    }
+
+    private String authenticateToken(final Subject serviceSubject, final byte[] kerberosToken,
+                                     final Set<String> trustedRealms)
             throws PrivilegedActionException {
-        return Subject.doAs(serviceSubject, (PrivilegedExceptionAction<JsonValue>) () -> {
+
+        if (serviceSubject == null) {
+            logger.error("Service subject is null");
+            return null;
+        }
+
+        return Subject.doAs(serviceSubject, (PrivilegedExceptionAction<String>) () -> {
             GSSContext context = GSSManager.getInstance().createContext((GSSCredential) null);
             logger.debug("Context created.");
             byte[] outToken = context.acceptSecContext(kerberosToken, 0, kerberosToken.length);
@@ -238,12 +243,13 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
             if (outToken != null) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Token returned from acceptSecContext: \n" +
-                                         DerValue.printByteArray(outToken, 0, outToken.length));
+                            DerValue.printByteArray(outToken, 0, outToken.length));
                 }
             }
 
             if (!context.isEstablished()) {
-                throw new NodeProcessException("Cannot establish context !");
+                logger.error("#authenticateToken: Cannot establish context !");
+                return null;
             } else {
                 logger.debug("Context established !");
                 GSSName user = context.getSrcName();
@@ -260,7 +266,8 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
                         }
                     }
                     if (!foundTrustedRealm) {
-                        throw new NodeProcessException("Kerberos token for " + userPrincipalName + " not trusted");
+                        logger.error("Kerberos token for {} is not trusted", userPrincipalName);
+                        return null;
                     }
                 }
                 // Check if the user account from the Kerberos ticket exists in the realm.
@@ -274,10 +281,9 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
                     }
                 }
                 logger.debug("WindowsDesktopSSO.authenticateToken:" + "User authenticated: " + user.toString());
-                sharedState.put(SharedStateConstants.USERNAME, userValue);
+                context.dispose();
+                return userValue;
             }
-            context.dispose();
-            return sharedState;
         });
     }
 
@@ -285,16 +291,18 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
      * Checks the request for an attribute "http-auth-failed".
      *
      * @param request THe HttpServletRequest.
-     * @return If the attribute is present and set to true, true is returned, otherwise false is returned.
+     * @return If the attribute is present and set to true of if IOException occurs during attribute extraction, true is returned, otherwise false is returned.
      */
-    private boolean hasWDSSOFailed(HttpServletRequest request) throws NodeProcessException {
+    private boolean hasWDSSOFailed(HttpServletRequest request) {
         try {
-            JsonValue jsonBody = JsonValue.json(Json.readJson(request.getParameter("jsonContent")));
+            JsonValue jsonBody = JsonValue.json(Json.readJson(request.getParameter(JSON_PARAMETER_NAME)));
             return jsonBody.isDefined(FAILURE_ATTRIBUTE) && jsonBody.isDefined(REASON_ATTRIBUTE) &&
                     jsonBody.get(FAILURE_ATTRIBUTE).asBoolean().equals(true) &&
                     jsonBody.get(REASON_ATTRIBUTE).asString().equals("http-auth-failed");
         } catch (IOException e) {
-            throw new NodeProcessException(e);
+            logger.error("IOException occured while trying to extract JSON Attributes {} and {} from request parameter {}",
+                    FAILURE_ATTRIBUTE, REASON_ATTRIBUTE, JSON_PARAMETER_NAME, e);
+            return true;
         }
     }
 
@@ -397,7 +405,7 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         return userName;
     }
 
-    private Subject serviceLogin() throws NodeProcessException {
+    private Subject serviceLogin() {
         logger.debug("New Service Login ...");
         System.setProperty("java.security.krb5.realm", config.kerberosRealm());
         System.setProperty("java.security.krb5.kdc", config.kerberosServerName());
@@ -412,7 +420,8 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
             lc = new LoginContext(WindowsDesktopSSOConfig.defaultAppName, null, null, wtc);
             lc.login();
         } catch (LoginException e) {
-            throw new NodeProcessException(e);
+            logger.error("Error while performing service login", e);
+            return null;
         }
         Subject serviceSubject = lc.getSubject();
         logger.debug("Service login succeeded.");
