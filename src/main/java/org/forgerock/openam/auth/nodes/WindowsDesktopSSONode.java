@@ -193,7 +193,7 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         try {
             username = authenticateToken(serviceSubject, kerberosToken, config.trustedKerberosRealms());
             if (username != null && !username.isEmpty()) {
-                return goTo(true).replaceSharedState(newSharedState).build();
+                return setUserNameAndReturnTrue(username, newSharedState);
             }
         } catch (PrivilegedActionException pe) {
             Exception e = extractException(pe);
@@ -207,7 +207,7 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
                         username = authenticateToken(serviceSubject, kerberosToken, config.trustedKerberosRealms());
                         if (username != null && !username.isEmpty()) {
                             logger.debug("Authentication succeeded with new cred.");
-                            return goTo(true).replaceSharedState(newSharedState).build();
+                            return setUserNameAndReturnTrue(username, newSharedState);
                         }
                     } catch (PrivilegedActionException ex) {
                         logger.error("Error while validating kerberos token", ex);
@@ -224,6 +224,13 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
     private Action logErrorAndReturnFalse(JsonValue newSharedState, String text, Object... objects) {
         logger.error(text, objects);
         return goTo(false).replaceSharedState(newSharedState).build();
+    }
+
+    private Action setUserNameAndReturnTrue(String username, JsonValue newSharedState) {
+        if (username != null) {
+            newSharedState.put(SharedStateConstants.USERNAME, username);
+        }
+        return goTo(true).replaceSharedState(newSharedState).build();
     }
 
     private String authenticateToken(final Subject serviceSubject, final byte[] kerberosToken,
