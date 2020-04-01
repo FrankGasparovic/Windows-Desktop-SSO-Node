@@ -17,6 +17,7 @@
 
 package org.forgerock.openam.auth.nodes;
 
+import com.sun.identity.sm.RequiredValueValidator;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.forgerock.http.util.Json;
@@ -29,6 +30,7 @@ import org.forgerock.openam.auth.node.api.NodeProcessException;
 import org.forgerock.openam.auth.node.api.SharedStateConstants;
 import org.forgerock.openam.auth.node.api.TreeContext;
 import org.forgerock.openam.core.realms.Realm;
+import org.forgerock.openam.sm.validation.FileExistenceValidator;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -92,25 +94,25 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         /**
          * The header name for zero-page login that will contain the identity's username.
          */
-        @Attribute(order = 100)
+        @Attribute(order = 100, validators = {RequiredValueValidator.class,})
         String principalName();
 
         /**
          * The header name for zero-page login that will contain the identity's username.
          */
-        @Attribute(order = 200)
+        @Attribute(order = 200, validators = {FileExistenceValidator.class,})
         String keytabFileName();
 
         /**
          * The header name for zero-page login that will contain the identity's username.
          */
-        @Attribute(order = 300)
+        @Attribute(order = 300, validators = {RequiredValueValidator.class,})
         String kerberosRealm();
 
         /**
          * The header name for zero-page login that will contain the identity's username.
          */
-        @Attribute(order = 400)
+        @Attribute(order = 400, validators = {RequiredValueValidator.class,})
         String kerberosServerName();
 
         /**
@@ -170,8 +172,6 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
             return Action.send(new HttpCallback(AUTHORIZATION, "WWW-Authenticate", NEGOTIATE, 401)).build();
         }
 
-        // Check to see if the Rest Auth Endpoint has signified that IWA has failed.
-        validateConfigParameters();
         Subject serviceSubject = serviceLogin();
 
         byte[] spnegoToken = getSPNEGOTokenFromHTTPRequest(Objects.requireNonNull(request));
@@ -279,39 +279,6 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
             context.dispose();
             return sharedState;
         });
-    }
-
-    private void validateConfigParameters() throws NodeProcessException {
-
-        if (logger.isDebugEnabled()) {
-            logger.debug("WindowsDesktopSSO params: \n" +
-                                 "principal: " + config.principalName() +
-                                 "\nkeytab file: " + config.keytabFileName() +
-                                 "\nrealm : " + config.kerberosRealm() +
-                                 "\nkdc server: " + config.kerberosServerName() +
-                                 "\ndomain principal: " + config.returnPrincipalWithDomainName() +
-                                 "\nLookup user in realm:" + config.lookupUserInRealm() +
-                                 "\nAccepted Kerberos realms: " + config.trustedKerberosRealms() +
-                                 "\nisInitiator: " + config.kerberosServiceIsInitiator());
-        }
-
-        if (StringUtils.isEmpty(config.principalName())) {
-            throw new NodeProcessException("Service Principal is empty");
-        }
-        if (StringUtils.isEmpty(config.keytabFileName())) {
-            throw new NodeProcessException("Key Tab File Path is empty");
-        }
-        if (StringUtils.isEmpty(config.kerberosRealm())) {
-            throw new NodeProcessException("Kerberos Realm is empty");
-        }
-        if (StringUtils.isEmpty(config.kerberosServerName())) {
-            throw new NodeProcessException("Kerberos Server Name is empty");
-        }
-
-        if (!Files.exists(Paths.get(config.keytabFileName()))) {
-            throw new NodeProcessException("Key Tab File does not exist at: " + config.keytabFileName());
-        }
-
     }
 
     /**
