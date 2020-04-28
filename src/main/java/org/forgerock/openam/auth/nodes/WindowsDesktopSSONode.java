@@ -133,6 +133,9 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         default boolean kerberosServiceIsInitiator() {
             return true;
         }
+
+        @Attribute(order = 900)
+        default String krb5ConfFilePath(){return "/tmp/krb5.conf";}
     }
 
     /**
@@ -416,6 +419,8 @@ public class WindowsDesktopSSONode extends AbstractDecisionNode {
         logger.debug("New Service Login ...");
         System.setProperty("java.security.krb5.realm", config.kerberosRealm());
         System.setProperty("java.security.krb5.kdc", config.kerberosServerName());
+        System.setProperty("java.security.krb5.conf", config.krb5ConfFilePath());
+
         WindowsDesktopSSOConfig wtc = new WindowsDesktopSSOConfig(Configuration.getConfiguration());
         wtc.setPrincipalName(config.principalName());
         wtc.setKeyTab(config.keytabFileName());
