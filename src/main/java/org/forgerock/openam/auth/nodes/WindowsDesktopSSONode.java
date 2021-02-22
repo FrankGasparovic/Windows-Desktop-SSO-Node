@@ -12,6 +12,7 @@
  * information: "Portions copyright [year] [name of copyright owner]".
  *
  * Copyright 2017-2018 ForgeRock AS.
+ * Portions Copyrighted 2020 IC Consult.
  */
 
 
